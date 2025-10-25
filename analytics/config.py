@@ -17,6 +17,10 @@ S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY', '')
 S3_SECRET_KEY = os.getenv('S3_SECRET_KEY', '')
 S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'roz')
 
+# S3 Directory structure
+S3_VIDEOS_PREFIX = os.getenv('S3_VIDEOS_PREFIX', 'raw_videos/')
+S3_HEATMAPS_PREFIX = os.getenv('S3_HEATMAPS_PREFIX', 'heatmaps/')
+
 # Local storage
 LOCAL_TEMP_DIR = os.getenv('LOCAL_TEMP_DIR', './temp')
 LOCAL_DOWNLOADS_DIR = os.path.join(LOCAL_TEMP_DIR, 'downloads')

@@ -74,12 +74,12 @@ def process_video(s3_manager: S3Manager, video_key: str) -> bool:
         return False
 
 
-def run_worker(prefix: str = "", max_videos: Optional[int] = None):
+def run_worker(date_prefix: str = "", max_videos: Optional[int] = None):
     """
     Main worker function.
 
     Args:
-        prefix: S3 prefix to filter videos (e.g., '2025/10/20/')
+        date_prefix: Date prefix to filter videos (e.g., '2025/10/20/')
         max_videos: Maximum number of videos to process
     """
     # Ensure directories exist
@@ -90,11 +90,13 @@ def run_worker(prefix: str = "", max_videos: Optional[int] = None):
         endpoint_url=config.S3_ENDPOINT_URL,
         access_key=config.S3_ACCESS_KEY,
         secret_key=config.S3_SECRET_KEY,
-        bucket_name=config.S3_BUCKET_NAME
+        bucket_name=config.S3_BUCKET_NAME,
+        videos_prefix=config.S3_VIDEOS_PREFIX,
+        heatmaps_prefix=config.S3_HEATMAPS_PREFIX
     )
 
     # Get videos to process
-    videos = s3_manager.get_videos_without_heatmaps(prefix)
+    videos = s3_manager.get_videos_without_heatmaps(date_prefix)
 
     if not videos:
         print("No videos to process.")
@@ -119,17 +121,17 @@ def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
         description='Generate heatmaps from S3 videos')
-    parser.add_argument('--prefix', type=str, default='',
-                        help='S3 prefix filter')
+    parser.add_argument('--date-prefix', type=str, default='',
+                        help='Date prefix filter (e.g., 2025/10/20/)')
     parser.add_argument('--max-videos', type=int,
                         default=None, help='Max videos to process')
 
     args = parser.parse_args()
 
     max_videos = args.max_videos or config.MAX_VIDEOS_PER_RUN
-    prefix = args.prefix or config.VIDEO_PREFIX
+    date_prefix = args.date_prefix or config.VIDEO_PREFIX
 
-    run_worker(prefix=prefix, max_videos=max_videos)
+    run_worker(date_prefix=date_prefix, max_videos=max_videos)
 
 
 if __name__ == '__main__':

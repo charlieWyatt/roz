@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 class S3Manager:
     """Manages interactions with S3/Cloudflare R2 storage."""
 
-    def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket_name: str):
+    def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket_name: str,
+                 videos_prefix: str = 'raw_videos/', heatmaps_prefix: str = 'heatmaps/'):
         """
         Initialize S3 client for Cloudflare R2.
 
@@ -25,8 +26,12 @@ class S3Manager:
             access_key: AWS/R2 access key ID
             secret_key: AWS/R2 secret access key
             bucket_name: Name of the bucket
+            videos_prefix: S3 prefix for videos (e.g., 'raw_videos/')
+            heatmaps_prefix: S3 prefix for heatmaps (e.g., 'heatmaps/')
         """
         self.bucket_name = bucket_name
+        self.videos_prefix = videos_prefix
+        self.heatmaps_prefix = heatmaps_prefix
         self.s3_client = boto3.client(
             's3',
             endpoint_url=endpoint_url,
@@ -35,13 +40,15 @@ class S3Manager:
             region_name='auto'  # Cloudflare R2 uses 'auto'
         )
         logger.info(f"S3Manager initialized for bucket: {bucket_name}")
+        logger.info(f"Videos prefix: {videos_prefix}")
+        logger.info(f"Heatmaps prefix: {heatmaps_prefix}")
 
-    def list_videos(self, prefix: str = "", extension: str = ".mp4") -> List[str]:
+    def list_videos(self, date_prefix: str = "", extension: str = ".mp4") -> List[str]:
         """
         List all video files in the bucket.
 
         Args:
-            prefix: Optional prefix to filter files (e.g., "2025/10/")
+            date_prefix: Optional date prefix to filter files (e.g., "2025/10/")
             extension: File extension to filter by (default: .mp4)
 
         Returns:
@@ -51,7 +58,10 @@ class S3Manager:
             video_files = []
             paginator = self.s3_client.get_paginator('list_objects_v2')
 
-            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+            # Combine videos_prefix with date_prefix
+            full_prefix = f"{self.videos_prefix}{date_prefix}"
+
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=full_prefix):
                 if 'Contents' not in page:
                     continue
 
@@ -61,19 +71,19 @@ class S3Manager:
                         video_files.append(key)
 
             logger.info(
-                f"Found {len(video_files)} video files with prefix '{prefix}'")
+                f"Found {len(video_files)} video files with prefix '{full_prefix}'")
             return video_files
 
         except ClientError as e:
             logger.error(f"Error listing videos: {e}")
             raise
 
-    def list_heatmaps(self, prefix: str = "") -> List[str]:
+    def list_heatmaps(self, date_prefix: str = "") -> List[str]:
         """
         List all heatmap files in the bucket.
 
         Args:
-            prefix: Optional prefix to filter files
+            date_prefix: Optional date prefix to filter files (e.g., "2025/10/")
 
         Returns:
             List of S3 keys for heatmap files
@@ -82,7 +92,10 @@ class S3Manager:
             heatmap_files = []
             paginator = self.s3_client.get_paginator('list_objects_v2')
 
-            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+            # Combine heatmaps_prefix with date_prefix
+            full_prefix = f"{self.heatmaps_prefix}{date_prefix}"
+
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=full_prefix):
                 if 'Contents' not in page:
                     continue
 
@@ -92,36 +105,42 @@ class S3Manager:
                         heatmap_files.append(key)
 
             logger.info(
-                f"Found {len(heatmap_files)} heatmap files with prefix '{prefix}'")
+                f"Found {len(heatmap_files)} heatmap files with prefix '{full_prefix}'")
             return heatmap_files
 
         except ClientError as e:
             logger.error(f"Error listing heatmaps: {e}")
             raise
 
-    def get_videos_without_heatmaps(self, prefix: str = "") -> List[str]:
+    def get_videos_without_heatmaps(self, date_prefix: str = "") -> List[str]:
         """
         Find all videos that don't have corresponding heatmaps.
 
         Args:
-            prefix: Optional prefix to filter files
+            date_prefix: Optional date prefix to filter files (e.g., "2025/10/")
 
         Returns:
             List of S3 keys for videos without heatmaps
         """
-        videos = self.list_videos(prefix)
-        heatmaps = self.list_heatmaps(prefix)
+        videos = self.list_videos(date_prefix)
+        heatmaps = self.list_heatmaps(date_prefix)
 
-        # Extract base names from heatmaps (remove _heatmap suffix and extension)
-        heatmap_base_names = set()
-        for heatmap in heatmaps:
-            base_name = heatmap.replace(
+        # Extract video paths from heatmaps
+        # Convert: heatmaps/2025/10/20/video_heatmap.jpg -> raw_videos/2025/10/20/video.mp4
+        heatmap_video_keys = set()
+        for heatmap_key in heatmaps:
+            # Remove heatmaps prefix and get the relative path
+            relative_path = heatmap_key.replace(self.heatmaps_prefix, '', 1)
+            # Remove _heatmap suffix and replace extension
+            relative_path = relative_path.replace(
                 '_heatmap.jpg', '.mp4').replace('_heatmap.png', '.mp4')
-            heatmap_base_names.add(base_name)
+            # Add videos prefix
+            video_key = f"{self.videos_prefix}{relative_path}"
+            heatmap_video_keys.add(video_key)
 
         # Find videos without heatmaps
         videos_without_heatmaps = [
-            v for v in videos if v not in heatmap_base_names]
+            v for v in videos if v not in heatmap_video_keys]
 
         logger.info(
             f"Found {len(videos_without_heatmaps)} videos without heatmaps")
@@ -199,14 +218,18 @@ class S3Manager:
         Generate the S3 key for a heatmap corresponding to a video.
 
         Args:
-            video_key: S3 key of the video file
+            video_key: S3 key of the video file (e.g., raw_videos/2025/10/20/video.mp4)
             extension: Extension for heatmap file (default: .jpg)
 
         Returns:
-            S3 key for the heatmap file
+            S3 key for the heatmap file (e.g., heatmaps/2025/10/20/video_heatmap.jpg)
         """
-        base_key = os.path.splitext(video_key)[0]
-        return f"{base_key}_heatmap{extension}"
+        # Remove videos_prefix to get relative path
+        relative_path = video_key.replace(self.videos_prefix, '', 1)
+        # Remove extension and add _heatmap suffix
+        base_path = os.path.splitext(relative_path)[0]
+        # Add heatmaps prefix
+        return f"{self.heatmaps_prefix}{base_path}_heatmap{extension}"
 
     @staticmethod
     def _is_heatmap(key: str) -> bool:
