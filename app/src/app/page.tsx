@@ -109,7 +109,7 @@ export default function Home() {
 
 						<div className="flex gap-8">
 							{/* Calendar */}
-							<div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+							<div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 self-start">
 								<DayPicker
 									mode="single"
 									selected={selectedDate}
