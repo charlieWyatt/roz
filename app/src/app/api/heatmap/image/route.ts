@@ -1,11 +1,6 @@
-import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { readFile, unlink } from "fs/promises";
-import path from "path";
-
-const execAsync = promisify(exec);
+import { HeatmapDao } from "@/lib/dao/heatmapDao";
+import { generateHeatmapImage } from "@/lib/services/heatmapImageGenerator";
 
 export async function GET(request: NextRequest) {
 	const searchParams = request.nextUrl.searchParams;
@@ -22,55 +17,30 @@ export async function GET(request: NextRequest) {
 	}
 
 	try {
-		// Check if data exists for this date
-		const startDate = new Date(date);
-		const endDate = new Date(startDate);
-		endDate.setDate(endDate.getDate() + 1);
+		// Fetch heatmap data from database
+		const dao = new HeatmapDao();
+		const heatmapData = await dao.getAggregatedHeatmapData(cameraId, date);
 
-		console.log("Checking data for:", { cameraId, date });
-
-		const count = await db
-			.selectFrom("heatmap_minutes")
-			.select((eb) => eb.fn.count("id").as("count"))
-			.where("camera_id", "=", cameraId)
-			.where("timestamp", ">=", startDate)
-			.where("timestamp", "<", endDate)
-			.executeTakeFirst();
-
-		if (!count || Number(count.count) === 0) {
-			return NextResponse.json({ error: "No data found" }, { status: 404 });
+		if (!heatmapData) {
+			console.log("No data found for:", { cameraId, date });
+			return NextResponse.json(
+				{ error: "No data found for this date" },
+				{ status: 404 }
+			);
 		}
 
-		console.log(`Found ${count.count} minutes, generating image...`);
-
-		// Generate temporary output path
-		const tempFile = path.join(
-			"/tmp",
-			`heatmap_${cameraId}_${date}_${Date.now()}.jpg`
+		console.log(
+			`Generating heatmap from ${heatmapData.totalMinutes} minutes of data...`
 		);
 
-		// Call Python script to generate heatmap
-		const projectRoot = path.join(process.cwd(), "..");
-		const pythonScript = path.join(
-			projectRoot,
-			"analytics/generate_heatmap_image.py"
-		);
+		// Generate image buffer
+		const imageBuffer = await generateHeatmapImage(heatmapData, {
+			quality: 90,
+		});
 
-		const command = `cd ${projectRoot} && poetry run python ${pythonScript} --date "${date}" --camera-id "${cameraId}" --output "${tempFile}"`;
+		console.log(`Image generated successfully: ${imageBuffer.length} bytes`);
 
-		console.log("Running command:", command);
-
-		await execAsync(command);
-
-		// Read the generated image
-		const imageBuffer = await readFile(tempFile);
-
-		// Clean up temp file
-		await unlink(tempFile).catch(() => {});
-
-		console.log("Image generated successfully");
-
-		// Return the image
+		// Return the image directly
 		return new NextResponse(imageBuffer, {
 			headers: {
 				"Content-Type": "image/jpeg",
