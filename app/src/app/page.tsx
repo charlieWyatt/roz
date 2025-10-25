@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
+import "./calendar-styles.css";
 
 interface Camera {
 	camera_id: string;
@@ -113,9 +114,6 @@ export default function Home() {
 									mode="single"
 									selected={selectedDate}
 									onSelect={setSelectedDate}
-									modifiersClassNames={{
-										selected: "bg-blue-500 text-white",
-									}}
 								/>
 							</div>
 

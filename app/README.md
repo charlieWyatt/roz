@@ -1,6 +1,5 @@
 # Roz Heatmap Visualization App
 
-
 #### API Routes
 
 - `/api/cameras` - List all available cameras
@@ -40,3 +39,4 @@ Open http://localhost:3000
 ```bash
 # Run all tests
 npm test
+```
