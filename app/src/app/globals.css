@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+	margin: 0;
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+		"Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom calendar styles */
+.rdp {
+	--rdp-cell-size: 50px;
+}
+
+.rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+	background-color: #f3f4f6;
+}
+
+.rdp-day_selected {
+	background-color: #3b82f6 !important;
+	color: white !important;
+}
+
+.rdp-day_selected:hover {
+	background-color: #2563eb !important;
+}
