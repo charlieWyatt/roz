@@ -37,7 +37,8 @@ def get_connection():
     try:
         # Try connection string first (preferred for Supabase)
         if DATABASE_URL:
-            conn = psycopg2.connect(DATABASE_URL + '&sslmode=require' if 'sslmode' not in DATABASE_URL else DATABASE_URL)
+            conn = psycopg2.connect(
+                DATABASE_URL + '&sslmode=require' if 'sslmode' not in DATABASE_URL else DATABASE_URL)
             return conn
         else:
             conn = psycopg2.connect(**DB_CONFIG)
@@ -121,7 +122,7 @@ def create_database_if_not_exists():
     if DATABASE_URL:
         print("Using managed database (Supabase) - skipping database creation")
         return True
-    
+
     try:
         # Connect to postgres database to create our database
         conn = psycopg2.connect(
