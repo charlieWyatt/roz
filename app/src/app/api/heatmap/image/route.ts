@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
 		console.log(`Image generated successfully: ${imageBuffer.length} bytes`);
 
 		// Return the image directly
-		return new NextResponse(imageBuffer, {
+		// Convert Buffer to Uint8Array for web-compatible response
+		return new NextResponse(new Uint8Array(imageBuffer), {
 			headers: {
 				"Content-Type": "image/jpeg",
 				"Cache-Control": "public, max-age=3600",
