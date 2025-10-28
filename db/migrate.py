@@ -18,12 +18,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'port': int(os.getenv('DB_PORT', '5432')),
-    'dbname': os.getenv('DB_NAME', 'roz'),
-    'user': os.getenv('DB_USER', 'roz_user'),
+    'dbname': os.getenv('DB_NAME', 'postgres'),
+    'user': os.getenv('DB_USER', 'postgres'),
     'password': os.getenv('DB_PASSWORD', ''),
+    'sslmode': 'require',  # Supabase requires SSL
 }
 
 MIGRATIONS_DIR = Path(__file__).parent / 'migrations'
@@ -32,12 +35,20 @@ MIGRATIONS_DIR = Path(__file__).parent / 'migrations'
 def get_connection():
     """Get database connection."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        return conn
+        # Try connection string first (preferred for Supabase)
+        if DATABASE_URL:
+            conn = psycopg2.connect(DATABASE_URL + '&sslmode=require' if 'sslmode' not in DATABASE_URL else DATABASE_URL)
+            return conn
+        else:
+            conn = psycopg2.connect(**DB_CONFIG)
+            return conn
     except psycopg2.OperationalError as e:
         print(f"Error connecting to database: {e}")
-        print(
-            f"Config: {DB_CONFIG['user']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}")
+        if DATABASE_URL:
+            print(f"Using DATABASE_URL connection string")
+        else:
+            print(
+                f"Config: {DB_CONFIG['user']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}")
         sys.exit(1)
 
 
@@ -106,6 +117,11 @@ def apply_migration(conn, migration_name: str, migration_path: Path):
 
 def create_database_if_not_exists():
     """Create the database if it doesn't exist."""
+    # Skip database creation for managed services like Supabase (using connection string)
+    if DATABASE_URL:
+        print("Using managed database (Supabase) - skipping database creation")
+        return True
+    
     try:
         # Connect to postgres database to create our database
         conn = psycopg2.connect(

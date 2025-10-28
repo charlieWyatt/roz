@@ -9,13 +9,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # PostgreSQL Database Configuration
+# For direct connections (individual params)
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_PORT = int(os.getenv('DB_PORT', '5432'))
-DB_NAME = 'roz'
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-if not DB_USER or not DB_PASSWORD:
-    raise ValueError('DB_USER and DB_PASSWORD must be set in the .env file.')
+DB_NAME = os.getenv('DB_NAME', 'postgres')
+DB_USER = os.getenv('DB_USER', '')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+
+# Alternative: Connection string (useful for Supabase pooler)
+DB_CONNECTION_STRING = os.getenv('DATABASE_URL', '')
+# Note: DB credentials are required for worker/processing scripts but not for S3-only scripts
 
 # S3/Cloudflare R2 Configuration
 S3_ENDPOINT_URL = os.getenv(

@@ -125,10 +125,18 @@ def run_worker(date_prefix: str = "", max_videos: Optional[int] = None,
     )
 
     try:
-        db_client = DatabaseClient(
-            host=config.DB_HOST, port=config.DB_PORT, dbname=config.DB_NAME,
-            user=config.DB_USER, password=config.DB_PASSWORD
-        )
+        # Try connection string first (better for Supabase IPv4 compatibility)
+        if config.DB_CONNECTION_STRING:
+            logger.info("Using connection string for database")
+            db_client = DatabaseClient(
+                connection_string=config.DB_CONNECTION_STRING)
+        else:
+            logger.info("Using individual DB parameters")
+            db_client = DatabaseClient(
+                host=config.DB_HOST, port=config.DB_PORT, dbname=config.DB_NAME,
+                user=config.DB_USER, password=config.DB_PASSWORD
+            )
+
         if not db_client.test_connection():
             logger.error("Database connection failed")
             return
@@ -196,13 +204,20 @@ def main():
     # If stats mode, just show stats and exit
     if args.stats:
         try:
-            db_client = DatabaseClient(
-                host=config.DB_HOST,
-                port=config.DB_PORT,
-                dbname=config.DB_NAME,
-                user=config.DB_USER,
-                password=config.DB_PASSWORD
-            )
+            # Use connection string for Supabase IPv4 compatibility
+            if config.DB_CONNECTION_STRING:
+                logger.info("Using connection string for database")
+                db_client = DatabaseClient(
+                    connection_string=config.DB_CONNECTION_STRING)
+            else:
+                logger.info("Using individual DB parameters")
+                db_client = DatabaseClient(
+                    host=config.DB_HOST,
+                    port=config.DB_PORT,
+                    dbname=config.DB_NAME,
+                    user=config.DB_USER,
+                    password=config.DB_PASSWORD
+                )
 
             stats = db_client.get_database_stats()
             print("\n" + "=" * 60)

@@ -4,6 +4,7 @@ PostgreSQL database client for heatmap data storage and retrieval.
 
 import os
 import logging
+import socket
 from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -15,39 +16,114 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def resolve_to_ipv4(hostname: str) -> str:
+    """
+    Resolve hostname to IPv4 address only.
+
+    Args:
+        hostname: Hostname to resolve
+
+    Returns:
+        IPv4 address as string
+
+    Raises:
+        socket.gaierror: If hostname cannot be resolved to IPv4
+    """
+    try:
+        # Force IPv4 resolution
+        result = socket.getaddrinfo(hostname, None, socket.AF_INET)
+        ipv4_address = result[0][4][0]
+        logger.info(f"Resolved {hostname} to IPv4: {ipv4_address}")
+        return ipv4_address
+    except (socket.gaierror, IndexError) as e:
+        logger.error(f"Failed to resolve {hostname} to IPv4: {e}")
+        raise
+
+
 class DatabaseClient:
     """Handles PostgreSQL connections and operations for heatmap data."""
 
-    def __init__(self, host: str, port: int, dbname: str, user: str, password: str,
+    def __init__(self, host: str = None, port: int = None, dbname: str = None,
+                 user: str = None, password: str = None,
+                 connection_string: str = None,
                  min_conn: int = 1, max_conn: int = 10):
         """
         Initialize database connection pool.
 
+        Can use either individual parameters OR a connection string.
+
         Args:
-            host: Database host
-            port: Database port
-            dbname: Database name
-            user: Database user
-            password: Database password
+            host: Database host (if not using connection_string)
+            port: Database port (if not using connection_string)
+            dbname: Database name (if not using connection_string)
+            user: Database user (if not using connection_string)
+            password: Database password (if not using connection_string)
+            connection_string: PostgreSQL connection string (alternative to individual params)
             min_conn: Minimum connections in pool
             max_conn: Maximum connections in pool
         """
-        self.conn_params = {
-            'host': host,
-            'port': port,
-            'dbname': dbname,
-            'user': user,
-            'password': password,
-        }
+        if connection_string:
+            # Use connection string with additional options
+            conn_str = connection_string
 
-        try:
-            self.pool = SimpleConnectionPool(
-                min_conn, max_conn, **self.conn_params)
-            logger.info(
-                f"Database connection pool created: {user}@{host}/{dbname}")
-        except psycopg2.Error as e:
-            logger.error(f"Failed to create connection pool: {e}")
-            raise
+            # Extract hostname from connection string and resolve to IPv4
+            # Format: postgresql://user:pass@hostname:port/db
+            import re
+            match = re.search(r'@([^:/@]+)', conn_str)
+            if match:
+                hostname = match.group(1)
+                try:
+                    ipv4_address = resolve_to_ipv4(hostname)
+                    # Replace hostname with IPv4 address
+                    conn_str = conn_str.replace(
+                        f'@{hostname}', f'@{ipv4_address}')
+                    logger.info(
+                        f"Replaced {hostname} with {ipv4_address} in connection string")
+                except Exception as e:
+                    logger.warning(
+                        f"Could not resolve to IPv4, using original hostname: {e}")
+
+            # Add options if not already in string
+            if 'sslmode' not in conn_str:
+                conn_str += '?sslmode=require' if '?' not in conn_str else '&sslmode=require'
+            if 'connect_timeout' not in conn_str:
+                conn_str += '&connect_timeout=10'
+
+            try:
+                self.pool = SimpleConnectionPool(min_conn, max_conn, conn_str)
+                logger.info(
+                    f"Database connection pool created using connection string")
+            except psycopg2.Error as e:
+                logger.error(f"Failed to create connection pool: {e}")
+                raise
+        else:
+            # Use individual parameters with IPv4 resolution
+            resolved_host = host
+            try:
+                resolved_host = resolve_to_ipv4(host)
+            except Exception as e:
+                logger.warning(
+                    f"Could not resolve to IPv4, using original host: {e}")
+
+            self.conn_params = {
+                'host': resolved_host,
+                'port': port,
+                'dbname': dbname,
+                'user': user,
+                'password': password,
+                'connect_timeout': 10,
+                'sslmode': 'require',  # Supabase requires SSL
+                'options': '-c statement_timeout=30000',  # 30 second timeout
+            }
+
+            try:
+                self.pool = SimpleConnectionPool(
+                    min_conn, max_conn, **self.conn_params)
+                logger.info(
+                    f"Database connection pool created: {user}@{resolved_host}/{dbname}")
+            except psycopg2.Error as e:
+                logger.error(f"Failed to create connection pool: {e}")
+                raise
 
     @contextmanager
     def get_connection(self):

@@ -40,3 +40,6 @@ Open http://localhost:3000
 # Run all tests
 npm test
 ```
+
+### Deployments
+Go to - Vercel and push buttons
